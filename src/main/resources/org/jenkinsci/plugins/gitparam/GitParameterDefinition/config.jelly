@@ -1,32 +1,53 @@
 <j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define" xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form">
+  
   <f:entry title="Name" field="name">
     <f:textbox />
   </f:entry>
+  
   <f:entry title="Description" field="description">
     <f:textbox />
   </f:entry>
+  
   <f:entry name="type" title="Parameter Type" field="type">
     <select name="type">
         <j:choose>
             <j:when test="${instance.type eq 'PT_TAG'}">
-                <option value="PT_TAG" selected="selected">Tag</option>
+               <option value="PT_TAG" selected="selected">Tag</option>
+               <option value="PT_BRANCH">Branch</option>
             </j:when>
             <j:otherwise>
     	       <option value="PT_TAG">Tag</option>
+    	       <option value="PT_BRANCH" selected="selected">Branch</option>
     	    </j:otherwise>
     	</j:choose>
-    	<j:choose>
-    	   <j:when test="${instance.type eq 'PT_BRANCH'}">       
-    	       <option value="PT_BRANCH" selected="selected">Branch</option>
-    	   </j:when>
-    	   <j:otherwise>
-               <option value="PT_BRANCH">Branch</option>
-           </j:otherwise>    
-    	</j:choose>   
     </select>
   </f:entry>
-
+  
   <f:entry title="Default Value" field="defaultValue">
     <f:textbox />
   </f:entry>
+  
+  <f:entry title="Sort order" field="sortOrder">
+    <select name="sortOrder">
+        <j:choose>  
+    	    <j:when test="${instance.sortOrder eq 'S_ASC'}">
+		    	<option value="S_ASC" selected="selected">Ascending</option>
+		    	<option value="S_DESC">Descending</option>
+            </j:when>
+            <j:otherwise>
+		    	<option value="S_ASC">Ascending</option>
+		    	<option value="S_DESC" selected="selected">Descending</option>
+    	    </j:otherwise>
+    	</j:choose>
+    </select>
+  </f:entry>
+  
+  <f:entry title="Try parse version" field="parseVersion">
+    <f:checkbox />
+  </f:entry>
+
+  <f:entry title="Repository URL" field="repositoryUrl">
+    <f:textbox />
+  </f:entry>
+
 </j:jelly>

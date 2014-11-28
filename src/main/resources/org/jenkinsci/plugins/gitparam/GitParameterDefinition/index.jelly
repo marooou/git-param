@@ -2,30 +2,41 @@
 	xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form"
 	xmlns:i="jelly:fmt" xmlns:p="/lib/hudson/project">
 	<f:entry title="${it.name}" description="${it.description}">
-	    <div name="parameter" description="${it.description}" style="padding-left: 10px">
+	    <div name="parameter" description="${it.description}" style="padding-left: 10px; float:left; ">
             <j:choose>
             	<j:when test="${it.type eq 'PT_TAG'}">
             	    <input type="hidden" name="name" value="${it.name}" />
-                    <select name="value" style="width: 150px; border: 1px solid #ccc;">
-            		<j:forEach var="val" items="${it.tagMap}" >
+                    <select name="value" size="5" style="width: 150px; border: 1px solid #ccc;">
+            		<j:forEach var="val" items="${it.tagList}" >
                             <j:choose>
-                                <option value="${val.key}">${val.value}</option>
+                            	<j:when test="${it.defaultValue eq val}">
+                            		<option value="${val}" selected="selected">${val}</option>
+                            	</j:when>
+                            	<j:otherwise>
+                            		<option value="${val}">${val}</option>
+                            	</j:otherwise>
                             </j:choose>
                         </j:forEach>  
                     </select>
             	</j:when>
             	<j:when test="${it.type eq 'PT_BRANCH'}">
             	    <input type="hidden" name="name" value="${it.name}" />
-                    <select name="value" style="width: 150px; border: 1px solid #ccc;">
-            		<j:forEach var="val" items="${it.branchMap}" >
-                            <j:choose>
-                                <option value="${val.key}">${val.value}</option>
+                    <select name="value" size="5" style="width: 150px; border: 1px solid #ccc;">
+            		<j:forEach var="val" items="${it.branchList}" >
+                           <j:choose>
+                            	<j:when test="${it.defaultValue eq val}">
+                            		<option value="${val}" selected="selected">${val}</option>
+                            	</j:when>
+                            	<j:otherwise>
+                            		<option value="${val}">${val}</option>
+                            	</j:otherwise>
                             </j:choose>
                         </j:forEach>  
                     </select>
             	</j:when>
             </j:choose>	
-        <p style="color: red; display: inline; margin-left: 10px">${it.errorMessage}</p>
         </div>
+        <div style="color: red; display: inline-block; float:left; margin-left: 10px; width: 300px">${it.errorMessage}</div>
+        <div style="clear: both"></div>
 	</f:entry>
 </j:jelly>

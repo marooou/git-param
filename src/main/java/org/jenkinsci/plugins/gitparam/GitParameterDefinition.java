@@ -1,54 +1,64 @@
 package org.jenkinsci.plugins.gitparam;
 
 import hudson.Extension;
-import hudson.model.ParameterValue;
 import hudson.model.AbstractProject;
 import hudson.model.Hudson;
 import hudson.model.ParameterDefinition;
+import hudson.model.ParameterValue;
 import hudson.model.ParametersDefinitionProperty;
 import hudson.plugins.git.GitSCM;
 import hudson.scm.SCM;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
-
 import org.apache.commons.lang.StringUtils;
 import org.eclipse.jgit.transport.URIish;
+import org.jenkinsci.plugins.gitparam.git.GitPort;
+import org.jenkinsci.plugins.gitparam.util.StringVersionComparator;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.StaplerRequest;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.UUID;
 
 public class GitParameterDefinition extends ParameterDefinition implements
 		Comparable<GitParameterDefinition> {
 
 	private static final long serialVersionUID = 1183643266235305947L;
-
+	private static final String DISPLAY_NAME = "Git branch/tag parameter";
+	
 	public static final String PARAM_TYPE_BRANCH = "PT_BRANCH";
 	public static final String PARAM_TYPE_TAG = "PT_TAG";
+	public static final String SORT_ASC = "S_ASC";
+	public static final String SORT_DESC = "S_DESC";
 
 	@Extension
 	public static class DescriptorImpl extends ParameterDescriptor {
 		@Override
 		public String getDisplayName() {
-			return "Git branch/tag parameter";
+			return DISPLAY_NAME;
 		}
 	}
 
 	private String type;
 	private String defaultValue;
-
-	private UUID uuid;
+	private String sortOrder;
+	private boolean parseVersion;
+	
+	private List<String> branchList;
+	private List<String> tagList;
 	private String errorMessage;
-
-	private Map<String, String> branchMap;
-	private Map<String, String> tagMap;
+	private UUID uuid;
+    private String repositoryUrl;
 
 	public String getErrorMessage() {
 		return errorMessage;
+	}
+	
+	private void setErrorMessage(String errorMessage) {
+		this.errorMessage = errorMessage;
+		if (errorMessage != null && !errorMessage.equals(""))
+			System.err.println(errorMessage);
 	}
 
 	@Override
@@ -60,10 +70,33 @@ public class GitParameterDefinition extends ParameterDefinition implements
 		if (type.equals(PARAM_TYPE_BRANCH) || type.equals(PARAM_TYPE_TAG)) {
 			this.type = type;
 		} else {
-			this.errorMessage = "Wrong type";
-			System.err.println(this.errorMessage);
+			this.setErrorMessage("Wrong type");
 		}
 	}
+
+    public String getRepositoryUrl() {
+        return repositoryUrl;
+    }
+
+    public void setRepositoryUrl(String repositoryUrl) {
+        this.repositoryUrl = repositoryUrl;
+    }
+
+    public String getSortOrder() {
+		return sortOrder;
+	}
+
+	public void setSortOrder(String sortOrder) {
+		this.sortOrder = sortOrder;
+	}
+
+	public boolean getParseVersion() {
+		return parseVersion;
+	}
+
+	public void setParseVersion(boolean parseVersion) {
+		this.parseVersion = parseVersion;
+	}	
 
 	public String getDefaultValue() {
 		return defaultValue;
@@ -75,13 +108,17 @@ public class GitParameterDefinition extends ParameterDefinition implements
 
 	@DataBoundConstructor
 	public GitParameterDefinition(String name, String type,
-			String defaultValue, String description) {
+			String defaultValue, String description, 
+			String sortOrder, boolean parseVersion, String repositoryUrl) {
 		super(name, description);
 
 		this.type = type;
 		this.defaultValue = defaultValue;
+		this.sortOrder = sortOrder;
+		this.parseVersion = parseVersion;
 		this.uuid = UUID.randomUUID();
 		this.errorMessage = "";
+        this.repositoryUrl = repositoryUrl;
 	}
 
 	public int compareTo(GitParameterDefinition o) {
@@ -140,36 +177,39 @@ public class GitParameterDefinition extends ParameterDefinition implements
 		return super.getDefaultParameterValue();
 	}
 
-	public Map<String, String> getBranchMap() {
-		if (branchMap == null || branchMap.isEmpty()) {
-			branchMap = generateContents(PARAM_TYPE_BRANCH);
+	public List<String> getBranchList() {
+		if (branchList == null || branchList.isEmpty()) {
+			branchList = generateContents(PARAM_TYPE_BRANCH);
 		}
-		return branchMap;
+		return branchList;
 	}
 
-	public Map<String, String> getTagMap() {
-		if (tagMap == null || tagMap.isEmpty()) {
-			tagMap = generateContents(PARAM_TYPE_TAG);
+	public List<String> getTagList() {
+		if (tagList == null || tagList.isEmpty()) {
+			tagList = generateContents(PARAM_TYPE_TAG);
 		}
-		return tagMap;
+		return tagList;
 	}
 	
-	private Map<String, String> toMap(List<String> list) {
-		if (list == null)
-			return null;
-		Map<String,String> hm = new HashMap<String,String>();
-		for(String str : list) {
-			hm.put(str, str);
-		}
-		return hm;
-	}
-
-	private Map<String, String> generateContents(String paramTypeTag) {
+	private List<String> generateContents(String paramTypeTag) {
 		AbstractProject<?, ?> project = getCurrentProject();
-					
-		URIish repoUrl = getRepositoryUrl(project);
-		if (repoUrl == null) 
+
+        URIish repoUrl = null;
+        if (this.getRepositoryUrl() == null || this.getRepositoryUrl().trim().equals("")) {
+            repoUrl = getRepositoryUrl(project);
+        } else {
+            try {
+                repoUrl = new URIish(this.getRepositoryUrl());
+            }
+            catch(Exception ex) {
+                this.setErrorMessage("An error occurred during parsing repo URL. \r\n" + ex.getMessage());
+                return null;
+            }
+        }
+
+		if (repoUrl == null) {
 			return null;
+        }
 
 		GitPort git = new GitPort(repoUrl);
 		
@@ -181,11 +221,14 @@ public class GitParameterDefinition extends ParameterDefinition implements
 			else if (paramTypeTag.equals(PARAM_TYPE_TAG)) {
 				contentList = git.getTagList();
 			}
-			return toMap(contentList);
+			
+			boolean reverseComparator = this.getSortOrder().equals(SORT_DESC);
+			StringVersionComparator comparator = new StringVersionComparator(reverseComparator, getParseVersion());
+			Collections.sort(contentList, comparator);
+			return contentList;
 		}
 		catch(Exception ex) {
-			this.errorMessage = "An error occurred during getting list content. \r\n" + ex.getMessage();
-			System.err.println(this.errorMessage);
+			this.setErrorMessage("An error occurred during getting list content. \r\n" + ex.getMessage());
 			return null;
 		}
 	}
@@ -200,8 +243,7 @@ public class GitParameterDefinition extends ParameterDefinition implements
 			return repoUri;
 		}
 		catch(IndexOutOfBoundsException ex) {
-			this.errorMessage = "There is no Git repository defined";
-			System.err.println(this.errorMessage);
+			this.setErrorMessage("There is no Git repository defined");
 			return null;
 		}
 	}
@@ -209,8 +251,7 @@ public class GitParameterDefinition extends ParameterDefinition implements
 	private GitSCM getGitSCM(AbstractProject<?, ?> project) {
 		SCM scm = project.getScm();
 		if (!(scm instanceof GitSCM)) {
-			this.errorMessage = "There is no Git SCM defined";
-			System.err.println(this.errorMessage);
+			this.setErrorMessage("There is no Git SCM defined");
 			return null;
 		}
 		return (GitSCM)scm;
@@ -243,7 +284,6 @@ public class GitParameterDefinition extends ParameterDefinition implements
 				}
 			}
 		}
-
 		return context;
 	}
 

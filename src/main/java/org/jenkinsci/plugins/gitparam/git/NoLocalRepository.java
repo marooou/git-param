@@ -1,4 +1,4 @@
-package org.jenkinsci.plugins.gitparam;
+package org.jenkinsci.plugins.gitparam.git;
 
 import java.io.IOException;
 
