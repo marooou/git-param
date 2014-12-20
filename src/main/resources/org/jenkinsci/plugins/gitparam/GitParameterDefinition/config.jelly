@@ -1,4 +1,4 @@
-<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define" xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form">
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define" xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form" xmlns:c="/lib/credentials">
   
   <f:entry title="Name" field="name">
     <f:textbox />
@@ -11,7 +11,7 @@
   <f:entry name="type" title="Parameter Type" field="type">
     <select name="type">
         <j:choose>
-            <j:when test="${instance.type eq 'PT_TAG'}">
+            <j:when test="${instance.paramType eq 'PT_TAG'}">
                <option value="PT_TAG" selected="selected">Tag</option>
                <option value="PT_BRANCH">Branch</option>
             </j:when>
@@ -46,8 +46,11 @@
     <f:checkbox />
   </f:entry>
 
-  <f:entry title="Repository URL" field="repositoryUrl">
+  <f:entry title="Hide 'master' Branch" field="omitMaster">
+    <f:checkbox />
+  </f:entry>
+ 
+  <f:entry title="Height of select field" field="selectView">
     <f:textbox />
   </f:entry>
-
 </j:jelly>

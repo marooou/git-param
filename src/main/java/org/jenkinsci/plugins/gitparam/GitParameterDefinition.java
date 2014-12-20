@@ -1,5 +1,20 @@
 package org.jenkinsci.plugins.gitparam;
 
+import hudson.model.Item;
+import hudson.plugins.git.GitStatus;
+import hudson.security.ACL;
+import org.jenkinsci.plugins.gitclient.GitClient;
+import com.cloudbees.plugins.credentials.CredentialsMatchers;
+import com.cloudbees.plugins.credentials.CredentialsProvider;
+import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
+import com.cloudbees.plugins.credentials.domains.URIRequirementBuilder;
+import org.eclipse.jgit.transport.RefSpec;
+
+import jenkins.scm.api.SCMSource;
+import jenkins.scm.api.SCMSourceDescriptor;
+import jenkins.scm.api.SCMSourceOwner;
+import jenkins.scm.api.SCMSourceOwners;
+
 import hudson.Extension;
 import hudson.model.AbstractProject;
 import hudson.model.Hudson;
@@ -21,16 +36,34 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
+import org.kohsuke.stapler.AncestorInPath;
+import org.kohsuke.stapler.DataBoundConstructor;
+import org.kohsuke.stapler.QueryParameter;
+import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerResponse;
+import org.kohsuke.stapler.export.ExportedBean;
+import org.kohsuke.stapler.export.Exported;
+
+import java.io.PrintWriter;
+import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.logging.Logger;
+import org.jenkinsci.plugins.gitclient.GitClient;
+
 public class GitParameterDefinition extends ParameterDefinition implements
 		Comparable<GitParameterDefinition> {
 
 	private static final long serialVersionUID = 1183643266235305947L;
 	private static final String DISPLAY_NAME = "Git branch/tag parameter";
+	private static final Logger LOG = Logger.getLogger(GitParameterDefinition.class.getName());
 	
 	public static final String PARAM_TYPE_BRANCH = "PT_BRANCH";
 	public static final String PARAM_TYPE_TAG = "PT_TAG";
 	public static final String SORT_ASC = "S_ASC";
 	public static final String SORT_DESC = "S_DESC";
+
 
 	@Extension
 	public static class DescriptorImpl extends ParameterDescriptor {
@@ -44,6 +77,8 @@ public class GitParameterDefinition extends ParameterDefinition implements
 	private String defaultValue;
 	private String sortOrder;
 	private boolean parseVersion;
+	private boolean omitMaster;
+	private String selectView;
 	
 	private List<String> branchList;
 	private List<String> tagList;
@@ -63,10 +98,15 @@ public class GitParameterDefinition extends ParameterDefinition implements
 
 	@Override
 	public String getType() {
-		return type;
+        // pretending a choice parameter to support some external IDE plugins
+		return "ChoiceParameterDefinition";
 	}
 
-	public void setType(String type) {
+    public String getParamType() {
+        return type;
+    }
+
+	public void setParamType(String type) {
 		if (type.equals(PARAM_TYPE_BRANCH) || type.equals(PARAM_TYPE_TAG)) {
 			this.type = type;
 		} else {
@@ -98,6 +138,24 @@ public class GitParameterDefinition extends ParameterDefinition implements
 		this.parseVersion = parseVersion;
 	}	
 
+// JRO
+	public boolean getOmitMaster() {
+		return omitMaster;
+	}
+
+	public void setOmitMaster(boolean omitMaster) {
+		this.omitMaster = omitMaster;
+	}
+
+	public String getSelectView() {
+		return selectView;
+	}
+	
+	public void setSelectView(String selectView) {
+		this.selectView = selectView;
+	}
+// JRO END
+
 	public String getDefaultValue() {
 		return defaultValue;
 	}
@@ -109,16 +167,20 @@ public class GitParameterDefinition extends ParameterDefinition implements
 	@DataBoundConstructor
 	public GitParameterDefinition(String name, String type,
 			String defaultValue, String description, 
-			String sortOrder, boolean parseVersion, String repositoryUrl) {
+			String sortOrder, boolean parseVersion, boolean omitMaster, String selectView,
+			String repositoryUrl) {
 		super(name, description);
 
 		this.type = type;
 		this.defaultValue = defaultValue;
 		this.sortOrder = sortOrder;
 		this.parseVersion = parseVersion;
+		this.omitMaster = omitMaster;
+		this.selectView = selectView;
 		this.uuid = UUID.randomUUID();
 		this.errorMessage = "";
         this.repositoryUrl = repositoryUrl;
+
 	}
 
 	public int compareTo(GitParameterDefinition o) {
@@ -137,7 +199,10 @@ public class GitParameterDefinition extends ParameterDefinition implements
 		if (values == null) {
 			return getDefaultParameterValue();
 		}
-		return null;
+		// first parameter value wins
+		GitParameterValue gitParameterValue = new GitParameterValue(
+                getName(), values[0]);
+        return gitParameterValue;
 	}
 
 	/*
@@ -190,6 +255,27 @@ public class GitParameterDefinition extends ParameterDefinition implements
 		}
 		return tagList;
 	}
+	/*
+	  API method pretending a choice parameter to support some external IDE plugins
+	 */
+    @Exported
+    public List<String> getChoices() {
+        List<String> contentList = null;
+        try {
+            if (this.getParamType().equals(PARAM_TYPE_BRANCH)) {
+                contentList = this.getBranchList();
+            }
+            else if (this.getParamType().equals(PARAM_TYPE_TAG)) {
+                contentList = this.getTagList();
+            }
+            return contentList;
+        }
+        catch(Exception ex) {
+            this.errorMessage = "An error occurred during getting list content. \r\n" + ex.getMessage();
+            System.err.println(this.errorMessage);
+            return null;
+        }
+    }
 	
 	private List<String> generateContents(String paramTypeTag) {
 		AbstractProject<?, ?> project = getCurrentProject();
@@ -240,6 +326,24 @@ public class GitParameterDefinition extends ParameterDefinition implements
 		URIish repoUri = null;
 		try {
 			repoUri = gitScm.getRepositories().get(0).getURIs().get(0);
+			for (hudson.plugins.git.UserRemoteConfig uc : gitScm.getUserRemoteConfigs()) { // DZI
+				if (uc.getCredentialsId() != null) {
+					String url = uc.getUrl();
+					StandardUsernamePasswordCredentials credentials = CredentialsMatchers.firstOrNull(
+						    CredentialsProvider.lookupCredentials(
+						    		StandardUsernamePasswordCredentials.class, project, ACL.SYSTEM,
+						    		URIRequirementBuilder.fromUri(url).build()
+						    ),
+					        CredentialsMatchers.allOf(
+					        		CredentialsMatchers.withId(uc.getCredentialsId()), GitClient.CREDENTIALS_MATCHER
+					        )
+					    );
+					if (credentials != null) {
+						repoUri = repoUri.setUser(credentials.getUsername());
+						repoUri = repoUri.setPass(credentials.getPassword().getPlainText());
+					}
+				}
+			} // DZI
 			return repoUri;
 		}
 		catch(IndexOutOfBoundsException ex) {

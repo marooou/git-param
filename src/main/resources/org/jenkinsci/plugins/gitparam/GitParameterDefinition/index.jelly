@@ -4,7 +4,7 @@
 	<f:entry title="${it.name}" description="${it.description}">
 	    <div name="parameter" description="${it.description}" style="padding-left: 10px; float:left; ">
             <j:choose>
-            	<j:when test="${it.type eq 'PT_TAG'}">
+            	<j:when test="${it.paramType eq 'PT_TAG'}">
             	    <input type="hidden" name="name" value="${it.name}" />
                     <select name="value" size="5" style="width: 150px; border: 1px solid #ccc;">
             		<j:forEach var="val" items="${it.tagList}" >
@@ -19,16 +19,31 @@
                         </j:forEach>  
                     </select>
             	</j:when>
-            	<j:when test="${it.type eq 'PT_BRANCH'}">
+            	<j:when test="${it.paramType eq 'PT_BRANCH'}">
             	    <input type="hidden" name="name" value="${it.name}" />
-                    <select name="value" size="5" style="width: 150px; border: 1px solid #ccc;">
+
+					<select name="value" size="${it.selectView}" style="width: 150px; border: 1px solid #ccc;">
             		<j:forEach var="val" items="${it.branchList}" >
                            <j:choose>
                             	<j:when test="${it.defaultValue eq val}">
-                            		<option value="${val}" selected="selected">${val}</option>
+	                            	<j:if test="${val eq 'master'}">
+										<j:if test="${it.omitMaster == false}">
+											<option selected="selected" value="${val}">${val}</option>
+										</j:if>
+	                            	</j:if>
+	                            	<j:if test="${val != 'master'}">
+	                            		<option selected="selected" value="${val}">${val}</option>
+	                            	</j:if>
                             	</j:when>
                             	<j:otherwise>
-                            		<option value="${val}">${val}</option>
+	                            	<j:if test="${val eq 'master'}">
+										<j:if test="${it.omitMaster == false}">
+											<option value="${val}">${val}</option>
+										</j:if>
+	                            	</j:if>
+	                            	<j:if test="${val != 'master'}">
+	                            		<option value="${val}">${val}</option>
+	                            	</j:if>
                             	</j:otherwise>
                             </j:choose>
                         </j:forEach>  

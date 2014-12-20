@@ -1,5 +1,11 @@
 package org.jenkinsci.plugins.gitparam.git;
 
+import hudson.Extension;
+import hudson.model.Item;
+import hudson.plugins.git.GitStatus;
+import hudson.security.ACL;
+import hudson.util.ListBoxModel;
+
 import java.io.IOException;
 import java.util.Collection;
 import java.util.LinkedList;
@@ -15,6 +21,17 @@ import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.JSchException;
+
+import org.kohsuke.stapler.QueryParameter;
+import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerResponse;
+
+import java.io.PrintWriter;
+import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.logging.Logger;
 
 public class GitPort {
 
@@ -43,7 +60,6 @@ public class GitPort {
 	public void setRepositoryUrl(URIish repositoryUrl) {
 		this.repositoryUrl = repositoryUrl;
 		this.credentialsProvider = getCredentialsProvider();
-
 	}
 
 	public List<String> getTagList() throws Exception {
@@ -61,12 +77,9 @@ public class GitPort {
 		LsRemoteCommand command = initLsRemoteCommand();
 		Collection<Ref> refs = command.setHeads(true).call();
 		List<String> branchList = getItemNameList(refs, PATH_HEADS);
-		if (omitMaster && branchList.contains(MASTER_NAME) && branchList.size() > 1) {
-			branchList.remove(MASTER_NAME);
-		}
+
 		return branchList;
 	}
-
 
 	private void setupSsh() {
 		setupSsh(SSH_IDENTITY, SSH_KNOWN_HOSTS);
@@ -84,7 +97,6 @@ public class GitPort {
 	    SshSessionFactory.setInstance(jschConfigSessionFactory);
 	    return this;
 	}
-	
 	
 	private List<String> getItemNameList(Collection<Ref> refList,
 			String stringToOmit) {
@@ -110,11 +122,12 @@ public class GitPort {
 			URIish url = getRepositoryUrl();
 			if (url.getUser() != null && url.getPass() != null) {
 				credentialsProvider = new UsernamePasswordCredentialsProvider(
-						url.getUser(), url.getPass());
+				url.getUser(), url.getPass());
 			} else {
 				credentialsProvider = CredentialsProvider.getDefault();
 			}
 		}
 		return credentialsProvider;
 	}
+
 }
